@@ -176,10 +176,10 @@ end
 ######################################################
 # main computations
 #datasets
-d = 20 # dimension of feature vectors
+d = 10 # dimension of feature vectors
 m = 50 #number of features in dataset
 
-γ = 10 #x spread
+γ = 1 #x spread
 
 X = rand(Normal(0.0,γ),(m,d))
 f = function(x) 
@@ -197,7 +197,7 @@ Ytest = [f(Xtest[i,:]) for i in 1:m]
 
 ##########################################################
 #constants
-η = 0.01
+η = 0.001
 N= 2000
 q=2
 c, ω = fit_srfe(X,Y,η,N;quantization=2,K=1)
@@ -205,14 +205,14 @@ c, ω = fit_srfe(X,Y,η,N;quantization=2,K=1)
 y_pred = compute_featuremap(Xtest,ω) * c
 rel_error(Ytest,y_pred)
 
-Xtest
-ω
+prune!(c,0.01)
+
 using Plots
 plot(c)
 plot(abs.(y_pred - Ytest))
+c
 
 
 
 
-
-
+Ytest
