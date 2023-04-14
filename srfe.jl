@@ -5,25 +5,7 @@ using RDatasets
 
 Random.seed!(42) 
 
-#datasets
-d = 10 # dimension of feature vectors
-m = 50 #number of features in dataset
 
-γ = 1 #x spread
-
-X = rand(Normal(0.0,γ),(m,d))
-f = function(x) 
-    s = 0
-    for i in 1:(length(x)-1)
-        s += exp(-x[i]^2) / (x[i+1]^2 + 1)
-    end
-    return 1/length(x) .* s
-end
-Y = [f(X[i,:]) for i in 1:m]
-
-
-Xtest = rand(Normal(0.0,γ),(m,d))
-Ytest = [f(Xtest[i,:]) for i in 1:m]
 #another dataset
 bX, bY = @load_boston
 bX = Matrix(bX)
@@ -47,7 +29,6 @@ end
 ζ = rand(Uniform(0.0,2π),N)
 
 # compute the kernel <- is not a kernel ;-; its a feature matrix
-#Todo: time measurements
 function compute_featuremap(x,ω)
     m, d1 = size(x)
     N, d2 = size(ω)
@@ -67,7 +48,7 @@ function compute_stable_featuremap(x,ω,ζ)
     m, d1 = size(x)
     N, d2 = size(ω)
     if d1 != d2 
-        throw(ArgumentError("mismatching dimensions"))
+        error("mismatching dimensions")
     end
     A = zeros(Float64, m,N)
     for i in 1:m
@@ -80,7 +61,7 @@ end
 
 
 #quantization schemes
-function quantize_msq!(A,K)
+function quantize_msq(A,K)
     K = convert(Float64,K)
     function rounding_quantizer(a,K)
         return round(a * (2K - 1)) / (2K - 1)
@@ -99,14 +80,16 @@ function ΣΔ_quantization(A,K)
     function rounding_quantizer(a,K)
         return round(a * (2K - 1)) / (2K - 1)
     end
+    q = zeros(Float64,(m,N))
     for i in 1:m
-        u = zeros(Float64,N+1) #u[i+1] = u_i
-        q = zeros(Float64,N)
+        #u = zeros(Float64,N+1) #u[i+1] = u_i
+        u = 0.0
         for j in 1:N
-            q[j] = rounding_quantizer(A[i,j] + u[j],K)
-            u[j+1] = u[j]+A[i,j]-q[j]
+            q[i,j] = rounding_quantizer(A[i,j] + u,K)
+            u = u + A[i,j] - q[i,j]
         end
     end
+    return q
 end
 
 function distr_ΣΔ_quantization(A,K,β,λ)
@@ -126,21 +109,24 @@ function distr_ΣΔ_quantization(A,K,β,λ)
 end
 
 #basis pursuit
-η = 0.01
+
 function basispursuit(A,y,η)
     m, N = size(A)
     c = Variable(N)
     p = minimize(norm(c,1), norm(A * c - y) <= η)
     solve!(p, SCS.Optimizer; silent_solver = true)
-    print(p.status)
+    #print(p.status)
     return evaluate(c)
 end
 
 function prune!(c, s=0.2)
     # s gives the top percentage sparsity
     # s = 0.2 -> only keep the top 20% of non zero values
+    if s >= 1 || s < 0
+        return c
+    end
     s = round(Int, min(length(c),length(c) * s))
-    indexperm = partialsortperm(c,1:s, rev=true)
+    indexperm = partialsortperm(abs.(c),1:s, rev=true)
     c[1:length(c) .∉ Ref(indexperm)] .= 0.0
     return c
 end
@@ -151,25 +137,82 @@ rel_error = function(y_truth, y_pred)
     norm((y_truth - y_pred) ./ y_truth)
 end
 
+
+######################################################
+# putting everything together
+function fit_srfe(X,Y,η,N ;σ2 = 1, q=2, quantization=0, K=10, pruning=1.0)
+    #generate weights ω (and ζ)
+    #normal weights
+    #if stable
+    #    ζ = rand(Uniform(0.0,2π),N)
+    #end
+    if q >= size(X)[2]
+        ω = rand(Normal(0.0,σ2),(N,d))
+    else
+        #sparse weights
+        ω = zeros(Float64,(N,d))
+        for i in 1:N
+            ω[i, sample(1:d,q, replace=false)] = rand(Normal(0.0,σ2),q)
+        end
+    end
+    
+    A = compute_featuremap(X,ω)
+    #A = compute_stable_featuremap(X,ω,ζ)
+    #quantization
+    if quantization == 1
+        A = quantize_msq(A,K)
+    end
+    if quantization == 2
+        A = ΣΔ_quantization(A,K)
+    end
+    c = basispursuit(A,Y,η)
+    #prune!(c,pruning)
+    return c, ω
+end
+
+
+
+
 ######################################################
 # main computations
-A = compute_kernel(X,ω)
-c = basispursuit(A,Y,η)
+#datasets
+d = 20 # dimension of feature vectors
+m = 50 #number of features in dataset
 
-As = compute_kernel(X,ωs)
-cs = basispursuit(As,Y,η)
+γ = 10 #x spread
+
+X = rand(Normal(0.0,γ),(m,d))
+f = function(x) 
+    s = 0
+    for i in 1:(length(x)-1)
+        s += exp(-x[i]^2) / (x[i+1]^2 + 1)
+    end
+    return 1/length(x) .* s
+end
+Y = [f(X[i,:]) for i in 1:m]
 
 
+Xtest = rand(Normal(0.0,γ),(m,d))
+Ytest = [f(Xtest[i,:]) for i in 1:m]
+
+##########################################################
+#constants
+η = 0.01
+N= 2000
+q=2
+c, ω = fit_srfe(X,Y,η,N;quantization=2,K=1)
+
+y_pred = compute_featuremap(Xtest,ω) * c
+rel_error(Ytest,y_pred)
+
+Xtest
+ω
 using Plots
 plot(c)
-plot(cs)
-
-
-y_pred = compute_kernel(ω,Xtest) * c
-rel_error(Ytest,y_pred)
-
-y_pred = compute_kernel(ωs,Xtest) * cs
-rel_error(Ytest,y_pred)
-
-
 plot(abs.(y_pred - Ytest))
+
+
+
+
+
+
