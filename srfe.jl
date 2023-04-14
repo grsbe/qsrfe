@@ -2,15 +2,21 @@ using LinearAlgebra
 using Random, Distributions
 using Convex, SCS
 using RDatasets
+using MLJ
+using DataFrames
 
 Random.seed!(42) 
 
 
 #another dataset
-bX, bY = @load_boston
-bX = Matrix(bX)
+bX, bY = @load_iris
+bX = Matrix(DataFrame(bX))
 bY = collect(bY)
+bX
 
+bX = (bX .- mean(bX)) ./ std(bX)
+bY = (bY .- mean(bY)) ./ std(bY)
+(Xtrain, Xtest), (ytrain, ytest) = partition((bX, bY), 0.9, rng=123, multi=true)
 
 ####################
 #weight init
@@ -63,15 +69,17 @@ end
 #quantization schemes
 function quantize_msq(A,K)
     K = convert(Float64,K)
+    m, N = size(A)
+    q = zeros(Float64,(m,N))
     function rounding_quantizer(a,K)
         return round(a * (2K - 1)) / (2K - 1)
     end
-    for i in 1:size(A)[1]
-        for j in 1:size(A)[2]
-            A[i,j] = rounding_quantizer(A[i,j],K)
+    for i in 1:m
+        for j in 1:N
+            q[i,j] = rounding_quantizer(A[i,j],K)
         end
     end
-    return A
+    return q
 end
 
 function ΣΔ_quantization(A,K)
@@ -116,7 +124,7 @@ function basispursuit(A,y,η)
     p = minimize(norm(c,1), norm(A * c - y) <= η)
     solve!(p, SCS.Optimizer; silent_solver = true)
     #print(p.status)
-    return evaluate(c)
+    return Convex.evaluate(c)
 end
 
 function prune!(c, s=0.2)
@@ -126,8 +134,8 @@ function prune!(c, s=0.2)
         return c
     end
     s = round(Int, min(length(c),length(c) * s))
-    indexperm = partialsortperm(abs.(c),1:s, rev=true)
-    c[1:length(c) .∉ Ref(indexperm)] .= 0.0
+    indexperm = partialsortperm(abs.(c),1:s, rev=true) #max-s indices
+    c[1:length(c) .∉ Ref(indexperm)] .= 0.0 #turn all indices not in indexperm to 0.0
     return c
 end
 
@@ -140,13 +148,14 @@ end
 
 ######################################################
 # putting everything together
-function fit_srfe(X,Y,η,N ;σ2 = 1, q=2, quantization=0, K=10, pruning=1.0)
+function fit_srfe(X,Y,η,N ;σ2 = 1, q=0, quantization=0, K=10, pruning=1.0)
     #generate weights ω (and ζ)
     #normal weights
     #if stable
-    #    ζ = rand(Uniform(0.0,2π),N)
+    m,d = size(X)
+    ζ = rand(Uniform(0.0,2π),N)
     #end
-    if q >= size(X)[2]
+    if q >= size(X)[2] || q <= 0
         ω = rand(Normal(0.0,σ2),(N,d))
     else
         #sparse weights
@@ -156,8 +165,8 @@ function fit_srfe(X,Y,η,N ;σ2 = 1, q=2, quantization=0, K=10, pruning=1.0)
         end
     end
     
-    A = compute_featuremap(X,ω)
-    #A = compute_stable_featuremap(X,ω,ζ)
+    #A = compute_featuremap(X,ω)
+    A = compute_stable_featuremap(X,ω,ζ)
     #quantization
     if quantization == 1
         A = quantize_msq(A,K)
@@ -167,7 +176,7 @@ function fit_srfe(X,Y,η,N ;σ2 = 1, q=2, quantization=0, K=10, pruning=1.0)
     end
     c = basispursuit(A,Y,η)
     #prune!(c,pruning)
-    return c, ω
+    return c, ω, ζ
 end
 
 
@@ -197,22 +206,21 @@ Ytest = [f(Xtest[i,:]) for i in 1:m]
 
 ##########################################################
 #constants
-η = 0.001
-N= 2000
-q=2
-c, ω = fit_srfe(X,Y,η,N;quantization=2,K=1)
+η = 0.01
+N= 400
+c, ω, ζ = fit_srfe(Xtrain,ytrain,η,N;σ2=1,q=0, quantization=0,K=1)
 
-y_pred = compute_featuremap(Xtest,ω) * c
-rel_error(Ytest,y_pred)
+y_pred = compute_stable_featuremap(Xtest,ω, ζ) * c
+rel_error(ytest,y_pred)
 
-prune!(c,0.01)
+prune!(c,0.1)
 
 using Plots
 plot(c)
-plot(abs.(y_pred - Ytest))
+plot(abs.(y_pred - ytest))
+
+plot(ytest)
+plot!(y_pred)
 c
-
-
-
-
-Ytest
+y_pred
+ytest
