@@ -4,35 +4,10 @@ using Convex, SCS
 using RDatasets
 using MLJ
 using DataFrames
+using MLJLinearModels
 
 Random.seed!(42) 
 
-
-#another dataset
-bX, bY = @load_iris
-bX = Matrix(DataFrame(bX))
-bY = collect(bY)
-bX
-
-bX = (bX .- mean(bX)) ./ std(bX)
-bY = (bY .- mean(bY)) ./ std(bY)
-(Xtrain, Xtest), (ytrain, ytest) = partition((bX, bY), 0.9, rng=123, multi=true)
-
-####################
-#weight init
-σ2 = 1
-N = 500 #number of weights
-#normal weights
-ω = rand(Normal(0.0,σ2),(N,d))
-
-#sparse weights
-q = 2
-ωs = zeros(Float64,(N,d))
-for i in 1:N
-    ωs[i, sample(1:d,q, replace=false)] = rand(Normal(0.0,σ2),q);
-end
-ωs
-ζ = rand(Uniform(0.0,2π),N)
 
 # compute the kernel <- is not a kernel ;-; its a feature matrix
 function compute_featuremap(x,ω)
@@ -65,6 +40,29 @@ function compute_stable_featuremap(x,ω,ζ)
     return A
 end
 
+function compute_featuremap(x,ω,func)
+    m, d1 = size(x)
+    N, d2 = size(ω)
+    if d1 != d2 
+        throw(ArgumentError("mismatching dimensions"))
+    end
+    A = zeros(Float64, m,N)
+    for i in 1:m
+        for j in 1:N
+            A[i,j] = func(x[i,:] ⋅ ω[j,:])
+        end
+    end
+    return A
+end
+
+#feature maps
+function rff(x)
+    return cos(x)
+end
+
+function ReLU(x)
+    return max(0,x)
+end
 
 #quantization schemes
 function quantize_msq(A,K)
@@ -127,6 +125,11 @@ function basispursuit(A,y,η)
     return Convex.evaluate(c)
 end
 
+#Lasso
+
+
+
+
 function prune!(c, s=0.2)
     # s gives the top percentage sparsity
     # s = 0.2 -> only keep the top 20% of non zero values
@@ -148,13 +151,12 @@ end
 
 ######################################################
 # putting everything together
-function fit_srfe(X,Y,η,N ;σ2 = 1, q=0, quantization=0, K=10, pruning=1.0)
+function fit_srfe(X,Y,λ,N,func ;σ2 = 1, q=0, quantization=0, K=10, pruning=1.0)
     #generate weights ω (and ζ)
     #normal weights
-    #if stable
     m,d = size(X)
-    ζ = rand(Uniform(0.0,2π),N)
-    #end
+    #ζ = rand(Uniform(0.0,2π),N)
+    println("generate weights")
     if q >= size(X)[2] || q <= 0
         ω = rand(Normal(0.0,σ2),(N,d))
     else
@@ -165,25 +167,30 @@ function fit_srfe(X,Y,η,N ;σ2 = 1, q=0, quantization=0, K=10, pruning=1.0)
         end
     end
     
+    println("compute features")
     #A = compute_featuremap(X,ω)
-    A = compute_stable_featuremap(X,ω,ζ)
+    A = compute_featuremap(X,ω,func)
     #quantization
     if quantization == 1
+        println("quantizing")
         A = quantize_msq(A,K)
     end
     if quantization == 2
+        println("quantizing")
         A = ΣΔ_quantization(A,K)
     end
-    c = basispursuit(A,Y,η)
+    println("lasso")
+    #c = basispursuit(A,Y,η)
+    lasso = LassoRegression(λ; fit_intercept=false)
+    c = MLJLinearModels.fit(lasso,A,Y)
     #prune!(c,pruning)
-    return c, ω, ζ
+    return c, ω
 end
 
 
 
 
 ######################################################
-# main computations
 #datasets
 d = 10 # dimension of feature vectors
 m = 50 #number of features in dataset
@@ -204,19 +211,30 @@ Y = [f(X[i,:]) for i in 1:m]
 Xtest = rand(Normal(0.0,γ),(m,d))
 Ytest = [f(Xtest[i,:]) for i in 1:m]
 
+#another dataset
+bX, bY = @load_boston
+bX = Matrix(DataFrame(bX))
+bY = collect(bY)
+bX
+
+bX = (bX .- mean(bX)) ./ std(bX)
+#bY = (bY .- mean(bY)) ./ std(bY)
+(Xtrain, Xtest), (ytrain, ytest) = partition((bX, bY), 0.9, rng=123, multi=true)
+
 ##########################################################
-#constants
-η = 0.01
-N= 400
-c, ω, ζ = fit_srfe(Xtrain,ytrain,η,N;σ2=1,q=0, quantization=0,K=1)
+#constants and computation
+λ = 0.1
+N= 20000
+func = rff
+c, ω = fit_srfe(Xtrain,ytrain,λ,N,func;σ2=1,q=0, quantization=0,K=1)
 
-y_pred = compute_stable_featuremap(Xtest,ω, ζ) * c
+y_pred = compute_featuremap(Xtest,ω,func) * c
 rel_error(ytest,y_pred)
-
-prune!(c,0.1)
+mean(abs.(ytest-y_pred))
 
 using Plots
 plot(c)
+prune!(c,0.01)
 plot(abs.(y_pred - ytest))
 
 plot(ytest)
