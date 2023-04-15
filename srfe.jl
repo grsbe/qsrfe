@@ -239,6 +239,18 @@ plot(abs.(y_pred - ytest))
 
 plot(ytest)
 plot!(y_pred)
-c
-y_pred
-ytest
+
+#standard lasso fit
+λ = 0.02
+lasso = LassoRegression(λ; fit_intercept=true)
+theta = MLJLinearModels.fit(lasso,Xtrain,ytrain)
+plot(theta)
+y_lasso = hcat( Xtest, ones(size(Xtest)[1])) * theta
+rel_error(ytest,y_lasso)
+mean(abs.(ytest-y_lasso))
+plot!(y_lasso)
+
+#
+
+
+
