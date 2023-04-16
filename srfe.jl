@@ -1,3 +1,7 @@
+module srfe
+
+export fit_srfe, prune!, ReLU, rff, rel_error, compute_featuremap
+
 using LinearAlgebra
 using Random, Distributions
 using Convex, SCS
@@ -44,7 +48,7 @@ function compute_featuremap(x,ω,func)
     m, d1 = size(x)
     N, d2 = size(ω)
     if d1 != d2 
-        throw(ArgumentError("mismatching dimensions"))
+        error("mismatching dimensions")
     end
     A = zeros(Float64, m,N)
     for i in 1:m
@@ -65,54 +69,84 @@ function ReLU(x)
 end
 
 #quantization schemes
-function quantize_msq(A,K)
-    K = convert(Float64,K)
-    m, N = size(A)
-    q = zeros(Float64,(m,N))
-    function rounding_quantizer(a,K)
-        return round(a * (2K - 1)) / (2K - 1)
+function rounding_quantizer(a,Δ,limit)
+    if abs(a) <= limit
+        return floor(a / Δ) * Δ + Δ / 2
+    else
+        return sign(a) * limit
     end
+end
+
+function stepsize(K)
+    return K = 1 / (K - 1/2)
+end
+
+function MSQ(A,K,limit=1)
+    m, N = size(A)
+    Δ = stepsize(K)
+    q = zeros(Float64,(m,N))
     for i in 1:m
         for j in 1:N
-            q[i,j] = rounding_quantizer(A[i,j],K)
+            q[i,j] = rounding_quantizer(A[i,j],Δ,limit)
         end
     end
     return q
 end
 
-function ΣΔ_quantization(A,K)
+function ΣΔQ(A,K,r=1,limit=1)
     m, N = size(A)
-    K = convert(Float64,K)
-    function rounding_quantizer(a,K)
-        return round(a * (2K - 1)) / (2K - 1)
-    end
+    Δ = stepsize(K)
     q = zeros(Float64,(m,N))
-    for i in 1:m
-        #u = zeros(Float64,N+1) #u[i+1] = u_i
-        u = 0.0
-        for j in 1:N
-            q[i,j] = rounding_quantizer(A[i,j] + u,K)
-            u = u + A[i,j] - q[i,j]
-        end
-    end
-    return q
-end
-
-function distr_ΣΔ_quantization(A,K,β,λ)
-    m, N = size(A)
-    K = convert(Float64,K)
-    function rounding_quantizer(a,K)
-        return round(a * (2K - 1)) / (2K - 1)
-    end
-    for i in 1:m
+    if r == 1
         u = zeros(Float64,N+1) #u[i+1] = u_i
-        q = zeros(Float64,N)
-        for j in 1:N
-            q[j] = rounding_quantizer(A[i,j] + u[j],K)
-            u[j+1] = u[j]+A[i,j]-q[j]
+        for i in 1:m
+            for j in 1:N
+                q[i,j] = rounding_quantizer(A[i,j] + u[j],Δ,limit)
+                u[j+1] = u[j] + A[i,j] - q[i,j]
+            end
+        end
+    elseif r == 2
+        u = zeros(Float64,N+1) #u[i+1] = u_i
+        for i in 1:m
+            q[i,1] = rounding_quantizer(A[i,1],Δ,limit)
+            u[2] = A[i,1] - q[i,1]
+            for j in 2:N
+                q[i,j] = rounding_quantizer(A[i,j] + 2u[j] - u[j-1],Δ,limit)
+                u[j+1] = 2u[j] - u[j-1] + A[i,j] - q[i,j]
+            end
+        end
+    else
+        error("r only implemented for r = 1,2")
+    end
+
+    return q
+end
+
+using ToeplitzMatrices
+using FFTW
+
+function βQ(A, β, λ, K,limit=1)
+    m, N = size(A)
+    Δ = stepsize(K)
+    p = round(Int64,N/λ)
+    A = (A .* (2 * K - β)) ./(2 * K - 1)
+    H_β = Toeplitz([[1,-β];zeros(Float64,λ-2)],[[1];zeros(Float64,λ-1)])
+    H =  diagm(ones(N)) - kron(diagm(ones(p)),H_β)
+    u = zeros(N+1) #u[i+1] = u_i
+    q = zeros((m, N))
+    for i in 1:m
+        q[i,1] = rounding_quantizer(A[i,1],Δ,limit)
+        u[2] = A[i,1] - q[i,1]
+        for j in 2:N
+            q[i,j] = rounding_quantizer(A[i,j]+H[j,j-1]*u[j],Δ,limit)
+            u[j+1] = H[j,j-1] * u[j] + A[i,j]  - q[i,j]
         end
     end
+    return q
 end
+
+
+
 
 #basis pursuit
 
@@ -173,11 +207,11 @@ function fit_srfe(X,Y,λ,N,func ;σ2 = 1, q=0, quantization=0, K=10, pruning=1.0
     #quantization
     if quantization == 1
         println("quantizing")
-        A = quantize_msq(A,K)
+        A = MSQ(A,K)
     end
     if quantization == 2
         println("quantizing")
-        A = ΣΔ_quantization(A,K)
+        A = ΣΔQ(A,K)
     end
     println("lasso")
     #c = basispursuit(A,Y,η)
@@ -191,66 +225,5 @@ end
 
 
 ######################################################
-#datasets
-d = 10 # dimension of feature vectors
-m = 50 #number of features in dataset
 
-γ = 1 #x spread
-
-X = rand(Normal(0.0,γ),(m,d))
-f = function(x) 
-    s = 0
-    for i in 1:(length(x)-1)
-        s += exp(-x[i]^2) / (x[i+1]^2 + 1)
-    end
-    return 1/length(x) .* s
 end
-Y = [f(X[i,:]) for i in 1:m]
-
-
-Xtest = rand(Normal(0.0,γ),(m,d))
-Ytest = [f(Xtest[i,:]) for i in 1:m]
-
-#another dataset
-bX, bY = @load_boston
-bX = Matrix(DataFrame(bX))
-bY = collect(bY)
-bX
-
-bX = (bX .- mean(bX)) ./ std(bX)
-#bY = (bY .- mean(bY)) ./ std(bY)
-(Xtrain, Xtest), (ytrain, ytest) = partition((bX, bY), 0.9, rng=123, multi=true)
-
-##########################################################
-#constants and computation
-λ = 0.1
-N= 20000
-func = rff
-c, ω = fit_srfe(Xtrain,ytrain,λ,N,func;σ2=1,q=0, quantization=0,K=1)
-
-y_pred = compute_featuremap(Xtest,ω,func) * c
-rel_error(ytest,y_pred)
-mean(abs.(ytest-y_pred))
-
-using Plots
-plot(c)
-prune!(c,0.01)
-plot(abs.(y_pred - ytest))
-
-plot(ytest)
-plot!(y_pred)
-
-#standard lasso fit
-λ = 0.02
-lasso = LassoRegression(λ; fit_intercept=true)
-theta = MLJLinearModels.fit(lasso,Xtrain,ytrain)
-plot(theta)
-y_lasso = hcat( Xtest, ones(size(Xtest)[1])) * theta
-rel_error(ytest,y_lasso)
-mean(abs.(ytest-y_lasso))
-plot!(y_lasso)
-
-#
-
-
-
