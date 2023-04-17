@@ -61,4 +61,20 @@ rel_error(ytest,y_lasso)
 mean(abs.(ytest-y_lasso))
 plot!(y_lasso)
 
-#
+
+function experiment_wrapper(Xtrain,ytrain,λ,N,func;σ2=1,q=0, quantization=0,K=1,r=1)
+    for l in λ
+        for n in N
+            for qw in quantization
+                for k in K
+                    for qq in q
+                        c, ω = fit_srfe(Xtrain,ytrain,l,n,func;σ2=1,q=qq, quantization=qw,K=k,r=1)
+                        y_pred = compute_featuremap(Xtest,ω,func) * c
+                        rel_error(ytest,y_pred)
+                        println("rel_error for λ=$(l), N=$(n), qmode=$(qw), K=$(k): $(rel_error(ytest,y_pred))")
+                    end
+                end
+            end
+        end
+    end
+end
