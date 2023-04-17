@@ -241,6 +241,8 @@ Xtest = rand(Normal(0.0,γ),(m,d))
 Ytest = [f(Xtest[i,:]) for i in 1:m]
 
 
+
+
 using DataFrames
 #boston dataset
 bX, bY = @load_boston
@@ -281,5 +283,39 @@ rel_error(ytest,y_lasso)
 mean(abs.(ytest-y_lasso))
 plot!(y_lasso)
 
+#one dim toy
+f_truth(x) = (x + 4) * (x + 1) * (x - 1) * (x - 3)
 
+x_train = vec(-5:0.5:5)[:,:]
+x_test = vec(-7:0.1:7)[:,:]
 
+noise = rand(Uniform(-20, 20), length(x_train))
+y_train = vec(f_truth.(x_train) + noise)
+y_test = vec(f_truth.(x_test))
+
+plot(x_test, y_test; label=raw"$f(x)$")
+scatter!(x_train, y_train; seriescolor=1, label="observations")
+
+c, ω = fit_srfe(x_train,y_train,λ,N,func;σ2=1,q=0, quantization=0,K=1,r=1)
+y_pred = compute_featuremap(x_test,ω,func) * c
+plot!(x_test, y_pred; label="srfe")
+
+##########
+
+function experiment_wrapper(Xtrain,ytrain,λ,N,func;σ2=1,q=0, quantization=0,K=1,r=1)
+    for l in λ
+        for n in N
+            for qw in quantization
+                for k in K
+                    for qq in q
+                        c, ω = fit_srfe(Xtrain,ytrain,l,n,func;σ2=1,q=qq, quantization=qw,K=k,r=1)
+                        y_pred = compute_featuremap(Xtest,ω,func) * c
+                        rel_error(ytest,y_pred)
+                        println("rel_error for λ=$(l), N=$(n), qmode=$(qw), K=$(k): $(rel_error(ytest,y_pred))")
+                    end
+                end
+            end
+        end
+    end
+ 
+end
