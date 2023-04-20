@@ -95,7 +95,7 @@ function MSQ(A,K,limit=1)
     return q
 end
 
-function ΣΔQ(A,K,r=1,limit=1)
+function ΣΔQ(A,K,r=1,limit=1,λ =0)
     m, N = size(A)
     Δ = stepsize(K)
     q = zeros(Float64,(m,N))
@@ -121,16 +121,41 @@ function ΣΔQ(A,K,r=1,limit=1)
         error("r only implemented for r = 1,2")
     end
 
+    if λ != 0
+        if N % λ != 0
+            error("choose number of weights to be divisible by λ")
+        end
+        p = N / λ
+        if r == 1
+            V = kron(diagm(ones(p)),ones(λ))
+            q = V * transpose(q) * sqrt(2/p) / norm(ones(λ))
+            q = transpose(q)
+        elseif r==2 
+            if λ % 2 == 0
+                error("hat_λ not an integer, choose uneven λ")
+            end
+            hat_λ = convert(Int64,(λ + 1) / 2)
+            v= [1:hat_λ;(hat_λ-1):-1:1]
+            V = kron(diagm(ones(p)),v)
+            q = V * transpose(q) * sqrt(2/p) / norm(v)
+            q = transpose(q)
+        end
+        
+    end
+
     return q
 end
 
 using ToeplitzMatrices
 using FFTW
 
-function βQ(A, β, λ, K,limit=1)
+function βQ(A, β, λ, K,limit=1,condensation=true)
     m, N = size(A)
     Δ = stepsize(K)
-    p = round(Int64,N/λ)
+    if N % λ != 0
+        error("choose number of weights to be divisible by λ")
+    end
+    p = N / λ
     A = (A .* (2 * K - β)) ./(2 * K - 1)
     H_β = Toeplitz([[1,-β];zeros(Float64,λ-2)],[[1];zeros(Float64,λ-1)])
     H =  diagm(ones(N)) - kron(diagm(ones(p)),H_β)
@@ -144,6 +169,14 @@ function βQ(A, β, λ, K,limit=1)
             u[j+1] = H[j,j-1] * u[j] + A[i,j]  - q[i,j]
         end
     end
+
+    if condensation
+        v= [β^(-i) for i in 1:λ]
+        V = kron(diagm(ones(p)),v)
+        q = V * transpose(q) * sqrt(2/p) / norm(v)
+        q = transpose(q)
+    end
+    
     return q
 end
 
