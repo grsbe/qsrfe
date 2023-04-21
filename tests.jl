@@ -78,3 +78,11 @@ function experiment_wrapper(Xtrain,ytrain,λ,N,func;σ2=1,q=0, quantization=0,K=
         end
     end
 end
+
+
+
+using MLJ 
+partition(1:1000, 0.8)
+
+X, y = make_blobs()
+(Xtrain, Xtest), (ytrain, ytest) = partition((X, y), 0.8, rng=123, multi=true)

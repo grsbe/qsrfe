@@ -7,8 +7,6 @@ using Random, Distributions
 using MLJ
 using MLJLinearModels
 
-Random.seed!(42) 
-
 
 # compute the kernel <- is not a kernel ;-; its a feature matrix
 function compute_featuremap(x,ω)
@@ -197,17 +195,17 @@ end
 
 #error calc
 function rel_error(y_truth, y_pred)
-    norm((y_truth - y_pred) ./ y_truth)
+    mean(abs.((y_truth - y_pred) ./ y_truth))
 end
 
 #generate weights
-function gen_weights(N,d,q=0)
+function gen_weights(N,d,q=0,σ2=1)
     #generate weights ω (and ζ)
     #normal weights
     
     ζ = rand(Uniform(0.0,2π),N)
     #println("generate weights")
-    if q >= size(X)[2] || q <= 0
+    if q >= d || q <= 0
         ω = rand(Normal(0.0,σ2),(N,d))
     else
         #sparse weights
@@ -221,10 +219,10 @@ end
 
 ######################################################
 # putting everything together
-function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=1,β=1.1,λ=2, limit=1,pruning=1.0)
+function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=1,β=1.1,λ=1, limit=1,pruning=1.0, max_iter=1000)
     #weights
     m,d = size(X)
-    ω, ζ = gen_weights(N,d,q)
+    ω, ζ = gen_weights(N,d,q,σ2)
     #println("compute features")
     A = compute_featuremap(X,ω, func,ζ)
 
@@ -235,7 +233,7 @@ function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=
     end
     if quantization == 2
         #println("quantizing")
-        A = ΣΔQ(A,K,r,limit)
+        A = ΣΔQ(A,K,r,limit,λ)
     end
     if quantization == 3
         #println("quantizing")
@@ -244,7 +242,7 @@ function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=
     #println("lasso")
     #c = basispursuit(A,Y,η)
     lasso = LassoRegression(lasso_lambda; fit_intercept=false)
-    solver = FISTA(max_iter=2000)
+    solver = FISTA(max_iter=max_iter)
     c = MLJLinearModels.fit(lasso,A,Y;solver)
     #prune!(c,pruning)
     return c, ω ,ζ
