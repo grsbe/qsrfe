@@ -26,7 +26,6 @@ function compute_featuremap(x,ω)
     return A
 end
 
-
 function compute_featuremap(x,ω,func)
     m, d1 = size(x)
     N, d2 = size(ω)
@@ -182,17 +181,6 @@ end
 
 #basis pursuit
 
-function basispursuit(A,y,η)
-    m, N = size(A)
-    c = Variable(N)
-    p = minimize(norm(c,1), norm(A * c - y) <= η)
-    solve!(p, SCS.Optimizer; silent_solver = true)
-    #print(p.status)
-    return Convex.evaluate(c)
-end
-
-#replace by Lasso
-
 
 function prune!(c, s=0.2)
     # s gives the top percentage sparsity
@@ -212,13 +200,11 @@ function rel_error(y_truth, y_pred)
     norm((y_truth - y_pred) ./ y_truth)
 end
 
-
-######################################################
-# putting everything together
-function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=1,β=1.1,λ=2, limit=1,pruning=1.0)
+#generate weights
+function gen_weights(N,d,q=0)
     #generate weights ω (and ζ)
     #normal weights
-    m,d = size(X)
+    
     ζ = rand(Uniform(0.0,2π),N)
     #println("generate weights")
     if q >= size(X)[2] || q <= 0
@@ -230,10 +216,18 @@ function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=
             ω[i, sample(1:d,q, replace=false)] = rand(Normal(0.0,σ2),q)
         end
     end
-    
+    return ω, ζ
+end
+
+######################################################
+# putting everything together
+function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=1,β=1.1,λ=2, limit=1,pruning=1.0)
+    #weights
+    m,d = size(X)
+    ω, ζ = gen_weights(N,d,q)
     #println("compute features")
     A = compute_featuremap(X,ω, func,ζ)
-    #A = compute_featuremap(X,ω,func)
+
     #quantization
     if quantization == 1
         #println("quantizing")
@@ -250,7 +244,8 @@ function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=
     #println("lasso")
     #c = basispursuit(A,Y,η)
     lasso = LassoRegression(lasso_lambda; fit_intercept=false)
-    c = MLJLinearModels.fit(lasso,A,Y)
+    solver = FISTA(max_iter=2000)
+    c = MLJLinearModels.fit(lasso,A,Y;solver)
     #prune!(c,pruning)
     return c, ω ,ζ
 end
