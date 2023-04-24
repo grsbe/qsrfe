@@ -1,6 +1,6 @@
 module srfe
 
-export fit_srfe, prune!, ReLU, rff, rel_error, compute_featuremap, MSQ, βQ, ΣΔQ
+export fit_srfe, prune!, ReLU, rff, rel_error, compute_featuremap, MSQ, βQ, ΣΔQ, ΣΔcondense, βcondense
 
 using LinearAlgebra
 using Random, Distributions
@@ -8,7 +8,7 @@ using MLJ
 using MLJLinearModels
 
 
-# compute the kernel <- is not a kernel ;-; its a feature matrix
+# compute the feature matrix
 function compute_featuremap(x,ω)
     m, d1 = size(x)
     N, d2 = size(ω)
@@ -92,7 +92,7 @@ function MSQ(A,K,limit=1)
     return q
 end
 
-function ΣΔQ(A,K,r=1,limit=1,λ =0)
+function ΣΔQ(A,K,r=1,limit=1)
     m, N = size(A)
     Δ = stepsize(K)
     q = zeros(Float64,(m,N))
@@ -118,14 +118,22 @@ function ΣΔQ(A,K,r=1,limit=1,λ =0)
         error("r only implemented for r = 1,2")
     end
 
+    
+
+    return q
+end
+
+function ΣΔcondense(q,r,λ)
+    m, N = size(q)
     if λ != 0
         if N % λ != 0
             error("choose number of weights to be divisible by λ")
         end
         p = N / λ
+        p = convert(Int64, p)
         if r == 1
-            V = kron(diagm(ones(p)),ones(λ))
-            q = V * transpose(q) * sqrt(2/p) / norm(ones(λ))
+            V = kron(diagm(ones(p)),ones(λ))'
+            q = V * transpose(q) .* sqrt(2/p) ./ norm(ones(λ))
             q = transpose(q)
         elseif r==2 
             if λ % 2 == 0
@@ -133,26 +141,37 @@ function ΣΔQ(A,K,r=1,limit=1,λ =0)
             end
             hat_λ = convert(Int64,(λ + 1) / 2)
             v= [1:hat_λ;(hat_λ-1):-1:1]
-            V = kron(diagm(ones(p)),v)
-            q = V * transpose(q) * sqrt(2/p) / norm(v)
+            V = kron(diagm(ones(p)),v)'
+            q = V * transpose(q) .* sqrt(2/p) ./ norm(v)
             q = transpose(q)
         end
         
     end
-
     return q
 end
+
+
+#A = [-1 -1 -1 -0.3 -0.2 0.0 0.1 0.2 0.1 0.4 0.7 0.8 0.9 1.0 1.0]
+#ΣΔQ(A,1)
+#ΣΔcondense(ΣΔQ(A,2),2,3)
+
+
 
 using ToeplitzMatrices
 using FFTW
 
-function βQ(A, β, λ, K,limit=1,condensation=true)
+function βQ(A, β,λ, K,limit=1,)
     m, N = size(A)
     Δ = stepsize(K)
+    if λ == 0
+        λ = 1
+    end
     if N % λ != 0
         error("choose number of weights to be divisible by λ")
     end
+    
     p = N / λ
+    p = convert(Int64,p)
     A = (A .* (2 * K - β)) ./(2 * K - 1)
     H_β = Toeplitz([[1,-β];zeros(Float64,λ-2)],[[1];zeros(Float64,λ-1)])
     H =  diagm(ones(N)) - kron(diagm(ones(p)),H_β)
@@ -167,17 +186,22 @@ function βQ(A, β, λ, K,limit=1,condensation=true)
         end
     end
 
-    if condensation
-        v= [β^(-i) for i in 1:λ]
-        V = kron(diagm(ones(p)),v)
-        q = V * transpose(q) * sqrt(2/p) / norm(v)
-        q = transpose(q)
-    end
-    
     return q
 end
 
+function βcondense(q,β,λ)
+    m, N = size(q)
+    p = N / λ
+    p = convert(Int64,p)
+    v= [β^(-i) for i in 1:λ]
+    V = kron(diagm(ones(p)),v)'
+    q = V * transpose(q) .* sqrt(2/p) ./ norm(v)
+    return transpose(q)
+end
 #basis pursuit
+
+#βQ(A,1.1,3,1)
+#βcondense(βQ(A,1.1,3,1),1.1,3)
 
 
 function prune!(c, s=0.2)
@@ -219,7 +243,7 @@ end
 
 ######################################################
 # putting everything together
-function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=1,β=1.1,λ=1, limit=1,pruning=1.0, max_iter=1000)
+function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=1,β=1.1,clambda=2,condensation=false, limit=1,pruning=1.0, max_iter=1000)
     #weights
     m,d = size(X)
     ω, ζ = gen_weights(N,d,q,σ2)
@@ -233,14 +257,20 @@ function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=
     end
     if quantization == 2
         #println("quantizing")
-        A = ΣΔQ(A,K,r,limit,λ)
+        A = ΣΔQ(A,K,r,limit)
+        if condensation
+            A = ΣΔcondense(A,r,clambda)
+        end
     end
     if quantization == 3
         #println("quantizing")
-        A = βQ(A,β,λ,K,limit)
+        A = βQ(A,β,clambda,K,limit)
+        if condensation
+            A = βcondense(A,β,clambda)
+        end
     end
     #println("lasso")
-    #c = basispursuit(A,Y,η)
+    
     lasso = LassoRegression(lasso_lambda; fit_intercept=false)
     solver = FISTA(max_iter=max_iter)
     c = MLJLinearModels.fit(lasso,A,Y;solver)
@@ -249,6 +279,4 @@ function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantization=0, K=10,r=
 end
 
 end #end module
-
-
 
