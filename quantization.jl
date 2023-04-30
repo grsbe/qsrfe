@@ -3,22 +3,25 @@
 abstract type Quantizer end
 
 @with_kw struct MSQ <: Quantizer
-    K::Int64 = 1
+    K::Int64 = 3
     limit::Float64 = 1
+    condense = false
 end
 
 @with_kw struct ΣΔQ <: Quantizer
-    K::Int64 = 1
+    K::Int64 = 3
     limit::Float64 = 1
     r::Int8 = 1
-    λ::Int64 = 2
+    λ::Int64 = 3
+    condense = false
 end
 
 @with_kw struct βQ <: Quantizer
-    K::Int64 = 1
+    K::Int64 = 3
     limit::Float64 = 1
     β::Float64 = 1.2
     λ::Int64 = 2
+    condense = false
 end
 
 #quantize function signatures
@@ -31,11 +34,11 @@ function _quantize(q::MSQ,A)
 end
 
 function _quantize(q::ΣΔQ,A)
-    return _ΣΔQ(A,q.r,q.K,q.limit)
+    return _ΣΔQ(A,q.K,q.r,q.limit)
 end
 
 function _quantize(q::βQ,A)
-    return _βQ(A,q.β,q.λ,q.limit)
+    return _βQ(A,q.β,q.λ,q.K,q.limit)
 end
 
 #condense functions
@@ -53,7 +56,7 @@ end
 
 
 #functions that do the quantizing
-function rounding_quantizer(a,Δ,limit)
+function rounding_quantizer_even(a,Δ,limit)
     if abs(a) <= limit
         return floor(a / Δ) * Δ + Δ / 2
     else
@@ -61,13 +64,39 @@ function rounding_quantizer(a,Δ,limit)
     end
 end
 
-function stepsize(K)
+function rounding_quantizer_odd(a,Δ,limit)
+    if abs(a) <= limit
+        return round(a / Δ) * Δ
+    else
+        return sign(a) * limit
+    end
+end
+
+function stepsize_even(K)
+    if K <=1
+        error("Must choose K >= 2")
+    end
+    K = K/2
     return K = 1 / (K - 1/2)
+end
+
+function stepsize_odd(K)
+    if K <=1
+        error("Must choose K >= 2")
+    end
+    return 2 / (K-1)
 end
 
 function _MSQ(A,K,limit=1)
     m, N = size(A)
-    Δ = stepsize(K)
+    if isodd(K)
+        Δ = stepsize_odd(K)
+        rounding_quantizer = rounding_quantizer_odd
+    else
+        Δ = stepsize_even(K)
+        rounding_quantizer = rounding_quantizer_even
+    end
+    
     q = zeros(Float64,(m,N))
     for i in 1:m
         for j in 1:N
@@ -79,7 +108,13 @@ end
 
 function _ΣΔQ(A,K,r=1,limit=1)
     m, N = size(A)
-    Δ = stepsize(K)
+    if isodd(K)
+        Δ = stepsize_odd(K)
+        rounding_quantizer = rounding_quantizer_odd
+    else
+        Δ = stepsize_even(K)
+        rounding_quantizer = rounding_quantizer_even
+    end
     q = zeros(Float64,(m,N))
     if r == 1
         u = zeros(Float64,N+1) #u[i+1] = u_i
@@ -115,7 +150,7 @@ function ΣΔcondense(q,r,λ)
             error("choose number of weights to be divisible by λ")
         end
         p = N / λ
-        p = convert(Int64, p)
+        p = convert(Int128, p)
         if r == 1
             V = kron(diagm(ones(p)),ones(λ))'
             q = V * transpose(q) .* sqrt(2/p) ./ norm(ones(λ))
@@ -124,7 +159,7 @@ function ΣΔcondense(q,r,λ)
             if λ % 2 == 0
                 error("hat_λ not an integer, choose uneven λ")
             end
-            hat_λ = convert(Int64,(λ + 1) / 2)
+            hat_λ = convert(Int128,(λ + 1) / 2)
             v= [1:hat_λ;(hat_λ-1):-1:1]
             V = kron(diagm(ones(p)),v)'
             q = V * transpose(q) .* sqrt(2/p) ./ norm(v)
@@ -145,9 +180,15 @@ end
 using ToeplitzMatrices
 using FFTW
 
-function βQ(A, β,λ, K,limit=1,)
+function _βQ(A, β,λ, K,limit=1,)
     m, N = size(A)
-    Δ = stepsize(K)
+    if isodd(K)
+        Δ = stepsize_odd(K)
+        rounding_quantizer = rounding_quantizer_odd
+    else
+        Δ = stepsize_even(K)
+        rounding_quantizer = rounding_quantizer_even
+    end
     if λ == 0
         λ = 1
     end

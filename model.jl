@@ -3,11 +3,43 @@
     N::UInt128 = 1000
     λ::Real = 0.003
     q::UInt64 = 0
-    quantizer::Quantizer = nothing
     func = rff
+    σ2 = 1
+    pruning=1.0
 end
 
-Normal()
+
+function fit(model::srfeRegressor,X,y;quantizer::Quantizer=nothing,max_iter=20000)
+    #weights
+    m,d = size(X)
+    ω, ζ = gen_weights(model.N,d,model.q,model.σ2)
+    #println("compute features")
+    A = compute_featuremap(X,ω, model.func,ζ)
+
+    if !isnothing(quantizer)
+        A = quantize(quantizer,A)
+        if quantizer.condense
+            A = condense(quantizer,A)
+        end
+    end
+    
+    lasso = LassoRegression(lasso_lambda; fit_intercept=false)
+    solver = FISTA(max_iter=max_iter)
+    c = MLJLinearModels.fit(lasso,A,Y;solver)
+    prune!(c,model.pruning)
+    return c, ω ,ζ
+end
+
+function predict(model::srfeRegressor,X,c,ω,ζ;quantizer::Quantizer=nothing)
+    A = compute_featuremap(X,ω, model.func,ζ)
+    if !isnothing(quantizer)
+        A = quantize(quantizer,A)
+        if quantizer.condense
+            A = condense(quantizer,A)
+        end
+    end
+    return A * c
+end
 
 #generate weights
 function gen_weights(N,d,q=0,σ2=1)
@@ -110,11 +142,14 @@ function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantizer=nothing, prun
 
     if !isnothing(quantizer)
         A = quantize(quantizer,A)
+        if quantizer.condense
+            A = condense(quantizer,A)
+        end
     end
     
     lasso = LassoRegression(lasso_lambda; fit_intercept=false)
     solver = FISTA(max_iter=max_iter)
     c = MLJLinearModels.fit(lasso,A,Y;solver)
-    #prune!(c,pruning)
+    prune!(c,pruning)
     return c, ω ,ζ
 end
