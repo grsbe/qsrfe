@@ -1,8 +1,8 @@
 
 @with_kw struct srfeRegressor
-    N::UInt128 = 1000
+    N::Int64 = 1000
     λ::Real = 0.003
-    q::UInt64 = 0
+    q::Int64 = 0
     func = rff
     σ2 = 1
     pruning=1.0
@@ -59,6 +59,8 @@ function gen_weights(N,d,q=0,σ2=1)
     end
     return ω, ζ
 end
+
+
 
 # compute the feature matrix
 function compute_featuremap(x,ω)
