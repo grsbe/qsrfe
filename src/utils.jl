@@ -6,3 +6,18 @@ end
 function mse(y_truth, y_pred)
     mean((y_truth - y_pred).^2)
 end
+
+#dataset loader
+using MLJ, DataFrames
+
+function load_dataset(X,Y;normalize=true,partitioning=0.8)
+    X = Matrix(DataFrame(X))
+    Y = collect(Y)
+
+    if normalize
+        X = (X .- mean(X)) ./ std(X)
+    end
+    
+    return partition((X, Y), partitioning, rng=123, multi=true)
+end
+
