@@ -1,5 +1,5 @@
-include("srfe.jl")
-using .srfe
+include("src/qsrfe.jl")
+using .qsrfe
 
 
 #datasets
