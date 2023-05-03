@@ -1,0 +1,4 @@
+name = "qsrfe"
+uuid = "6a8f6128-6d93-45fc-b797-900623866f8e"
+authors = ["grasberger <grasberger@fs.tum.de>"]
+version = "0.1.0"
