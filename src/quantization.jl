@@ -5,7 +5,7 @@ abstract type Quantizer end
 @with_kw struct MSQ <: Quantizer
     K::Int64 = 3
     limit::Float64 = 1
-    condense = false
+    condense::Bool = false
 end
 
 @with_kw struct ΣΔQ <: Quantizer
@@ -13,7 +13,7 @@ end
     limit::Float64 = 1
     r::Int8 = 1
     λ::Int64 = 3
-    condense = false
+    condense::Bool = false
 end
 
 @with_kw struct βQ <: Quantizer
@@ -21,7 +21,7 @@ end
     limit::Float64 = 1
     β::Float64 = 1.2
     λ::Int64 = 2
-    condense = false
+    condense::Bool = false
 end
 
 #quantize function signatures
@@ -169,13 +169,6 @@ function ΣΔcondense(q,r,λ)
     end
     return q
 end
-
-
-#A = [-1 -1 -1 -0.3 -0.2 0.0 0.1 0.2 0.1 0.4 0.7 0.8 0.9 1.0 1.0]
-#ΣΔQ(A,1)
-#ΣΔcondense(ΣΔQ(A,2),2,3)
-
-
 
 using ToeplitzMatrices
 using FFTW

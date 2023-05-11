@@ -1,11 +1,12 @@
 
 @with_kw struct srfeRegressor
     N::Int64 = 1000
-    λ::Real = 0.003
+    λ::Float64 = 0.003
     q::Int64 = 0
     func = rff
-    σ2 = 1
-    pruning=1.0
+    σ2::Float64 = 1
+    pruning::Float64=1.0
+    intercept::Bool = false
 end
 
 
@@ -23,7 +24,7 @@ function fit(model::srfeRegressor,X,y;quantizer::Quantizer=nothing,max_iter=2000
         end
     end
     
-    lasso = LassoRegression(lasso_lambda; fit_intercept=false)
+    lasso = LassoRegression(lasso_lambda; fit_intercept=model.intercept) #if intercept is true, the last element of c is the intercept
     solver = FISTA(max_iter=max_iter)
     c = MLJLinearModels.fit(lasso,A,Y;solver)
     prune!(c,model.pruning)
@@ -32,6 +33,9 @@ end
 
 function predict(model::srfeRegressor,X,c,ω,ζ;quantizer::Quantizer=nothing)
     A = compute_featuremap(X,ω, model.func,ζ)
+    if model.intercept
+        A = hcat(A,ones(size(A,1)))
+    end
     if !isnothing(quantizer)
         A = quantize(quantizer,A)
         if quantizer.condense
@@ -131,6 +135,19 @@ function prune!(c, s=0.2)
     indexperm = partialsortperm(abs.(c),1:s, rev=true) #max-s indices
     c[1:length(c) .∉ Ref(indexperm)] .= 0.0 #turn all indices not in indexperm to 0.0
     return c
+end
+
+function prune(c, s=0.2)
+    # s gives the top percentage sparsity
+    # s = 0.2 -> only keep the top 20% of non zero values
+    if s >= 1 || s < 0
+        return copy(c)
+    end
+    c_ = copy(c)
+    s = round(Int, min(length(c),length(c) * s))
+    indexperm = partialsortperm(abs.(c_),1:s, rev=true) #max-s indices
+    c_[1:length(c) .∉ Ref(indexperm)] .= 0.0 #turn all indices not in indexperm to 0.0
+    return c_
 end
 
 ######################################################

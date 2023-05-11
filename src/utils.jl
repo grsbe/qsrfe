@@ -21,3 +21,8 @@ function load_dataset(X,Y;normalize=true,partitioning=0.8)
     return partition((X, Y), partitioning, rng=123, multi=true)
 end
 
+function test_metrics(ytest,ypred,ytrain,ypredtrain)
+    println("MSE: ",mse(ytest,ypred)," train MSE: ",mse(ypredtrain,ytrain))
+    println("rel: ",rel_error(ytest,ypred)," train rel: ",rel_error(ytrain,ypredtrain))
+    return
+end
