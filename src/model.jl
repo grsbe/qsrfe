@@ -24,9 +24,23 @@ function fit(model::srfeRegressor,X,y;quantizer::Quantizer=nothing,max_iter=2000
         end
     end
     
-    lasso = LassoRegression(lasso_lambda; fit_intercept=model.intercept) #if intercept is true, the last element of c is the intercept
+    lasso = LassoRegression(model.λ; fit_intercept=model.intercept) #if intercept is true, the last element of c is the intercept
     solver = FISTA(max_iter=max_iter)
-    c = MLJLinearModels.fit(lasso,A,Y;solver)
+    c = MLJLinearModels.fit(lasso,A,y;solver)
+    prune!(c,model.pruning)
+    return c, ω ,ζ
+end
+
+function fit(model::srfeRegressor,X,y;max_iter=20000)
+    #weights
+    m,d = size(X)
+    ω, ζ = gen_weights(model.N,d,model.q,model.σ2)
+    #println("compute features")
+    A = compute_featuremap(X,ω, model.func,ζ)
+
+    lasso = LassoRegression(model.λ; fit_intercept=model.intercept) #if intercept is true, the last element of c is the intercept
+    solver = FISTA(max_iter=max_iter)
+    c = MLJLinearModels.fit(lasso,A,y;solver)
     prune!(c,model.pruning)
     return c, ω ,ζ
 end
@@ -41,6 +55,14 @@ function predict(model::srfeRegressor,X,c,ω,ζ;quantizer::Quantizer=nothing)
         if quantizer.condense
             A = condense(quantizer,A)
         end
+    end
+    return A * c
+end
+
+function predict(model::srfeRegressor,X,c,ω,ζ)
+    A = compute_featuremap(X,ω, model.func,ζ)
+    if model.intercept
+        A = hcat(A,ones(size(A,1)))
     end
     return A * c
 end

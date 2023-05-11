@@ -2,6 +2,7 @@
 
 abstract type Quantizer end
 
+
 @with_kw struct MSQ <: Quantizer
     K::Int64 = 3
     limit::Float64 = 1
