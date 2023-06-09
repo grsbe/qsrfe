@@ -151,10 +151,10 @@ function ΣΔcondense(q,r,λ)
             error("choose number of weights to be divisible by λ")
         end
         p = N / λ
-        p = convert(Int128, p)
+        p = convert(Int64, p)
         if r == 1
             V = kron(diagm(ones(p)),ones(λ))'
-            q = V * transpose(q) .* sqrt(2/p) ./ norm(ones(λ))
+            q = (V * transpose(q) .* sqrt(2/p)) ./ norm(ones(λ))
             q = transpose(q)
         elseif r==2 
             if λ % 2 == 0
@@ -163,7 +163,7 @@ function ΣΔcondense(q,r,λ)
             hat_λ = convert(Int128,(λ + 1) / 2)
             v= [1:hat_λ;(hat_λ-1):-1:1]
             V = kron(diagm(ones(p)),v)'
-            q = V * transpose(q) .* sqrt(2/p) ./ norm(v)
+            q = (V * transpose(q) .* sqrt(2/p)) ./ norm(v)
             q = transpose(q)
         end
         

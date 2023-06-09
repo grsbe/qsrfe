@@ -10,7 +10,7 @@
 end
 
 
-function fit(model::srfeRegressor,X,y;quantizer::Quantizer=nothing,max_iter=20000)
+function fit(model::srfeRegressor,X,y,quantizer::Quantizer=nothing;max_iter=20000)
     #weights
     m,d = size(X)
     ω, ζ = gen_weights(model.N,d,model.q,model.σ2)
@@ -45,7 +45,7 @@ function fit(model::srfeRegressor,X,y;max_iter=20000)
     return c, ω ,ζ
 end
 
-function predict(model::srfeRegressor,X,c,ω,ζ;quantizer::Quantizer=nothing)
+function predict(model::srfeRegressor,X,c,ω,ζ,quantizer::Quantizer)
     A = compute_featuremap(X,ω, model.func,ζ)
     if model.intercept
         A = hcat(A,ones(size(A,1)))

@@ -1,3 +1,4 @@
+
 include("src/qsrfe.jl")
 using .qsrfe
 
@@ -24,13 +25,13 @@ data2 = ontoring(rand(Normal(0.,0.5),(m,2)),4) .+ rand(Normal(0.,0.5),(m,2))
 xtrain = vcat(data1,data2)
 ytrain = [ones(Float64,n);zeros(Float64,m)]
 
-
+using Plots
 
 scatter(data1[:,1],data1[:,2])
 scatter!(data2[:,1],data2[:,2])
 
 
-srfe = qsrfe.srfeRegressor(;N=500, λ= 0.001, intercept=false)
+srfe = qsrfe.srfeRegressor(;N=100, λ= 0.27, intercept=false)
 
 c, ω, ζ = qsrfe.fit(srfe,xtrain,ytrain)
 
@@ -62,17 +63,19 @@ scatter!(data2[:,1],data2[:,2],label="y = 0")
 using MLJ
 using MLJLinearModels
 
-λ = range(0.3,0.001,length=1000)
+λ = range(0.35,0.005,length=500)
 
-w = 500 #number of weights
+w = 100 #number of weights
 
 c_collection = zeros(Float64,(1,w))
 
 m,d = size(xtrain)
 ω, ζ = qsrfe.gen_weights(w,d)
 #println("compute features")
+q = ΣΔQ(K=8)
 A = qsrfe.compute_featuremap(xtrain,ω, cos,ζ)
-solver = FISTA(max_iter=20000)
+A = quantize(q,A)
+solver = FISTA(max_iter=200000)
 
 
 for l in λ
@@ -84,3 +87,10 @@ c_collection = c_collection[2:size(c_collection,1),:]
 
 plot(λ,c_collection;legend=false,xaxis=:log)
 
+
+i = 950
+c_ = c_collection[i,:]
+c_
+s = sum(x -> x > 0.0, c_)
+maxs = partialsortperm(abs.(c_),1:s, rev=true) #max-s indices
+scatter(ω[maxs,1],ω[maxs,2];zcolor=c_[maxs])

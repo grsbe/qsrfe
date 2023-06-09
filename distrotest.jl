@@ -13,7 +13,7 @@ for i in 1:trials
     x = rand(r,dim)
     ω = rand(om,dim)
     tau = rand(Uniform(-π,π))
-    data[i] = x ⋅ ω + tau
+    data[i] = cos(x ⋅ ω + tau)
 end
 
-histogram(data, bins=100)
+histogram(data, bins=100, normalize=true, title="distibution of cos(x ⋅ ω + τ)",label="")
