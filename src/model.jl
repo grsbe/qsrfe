@@ -7,10 +7,11 @@
     σ2::Float64 = 1
     pruning::Float64=1.0
     intercept::Bool = false
+    pinvrecovery::Bool=false
 end
 
 
-function fit(model::srfeRegressor,X,y,quantizer::Quantizer=nothing;max_iter=20000)
+function fit(model::srfeRegressor,X,y,quantizer::Quantizer=nothing;max_iter=20000,verbose=false)
     #weights
     m,d = size(X)
     ω, ζ = gen_weights(model.N,d,model.q,model.σ2)
@@ -28,10 +29,21 @@ function fit(model::srfeRegressor,X,y,quantizer::Quantizer=nothing;max_iter=2000
     solver = FISTA(max_iter=max_iter)
     c = MLJLinearModels.fit(lasso,A,y;solver)
     prune!(c,model.pruning)
+    supp = abs.(c) .> 0.0
+    verbose && print("support: ",sum(supp),"/",length(c))
+    #c = c[supp]
+    #leftinverse recovery
+    if model.pinvrecovery
+        c = pinv(A[:,supp]) * y
+    end
+    if quantizer.condense
+        supp = repeat(supp, inner=quantizer.λ)
+    end
+    #return c, ω[supp,:] ,ζ[supp]
     return c, ω ,ζ
 end
 
-function fit(model::srfeRegressor,X,y;max_iter=20000)
+function fit(model::srfeRegressor,X,y;max_iter=20000, verbose=false)
     #weights
     m,d = size(X)
     ω, ζ = gen_weights(model.N,d,model.q,model.σ2)
@@ -42,7 +54,15 @@ function fit(model::srfeRegressor,X,y;max_iter=20000)
     solver = FISTA(max_iter=max_iter)
     c = MLJLinearModels.fit(lasso,A,y;solver)
     prune!(c,model.pruning)
-    return c, ω ,ζ
+
+    supp = abs.(c) .> 0.0
+    verbose && print("support: ",sum(supp),"/",length(c))
+    c = c[supp]
+    #leftinverse recovery
+    if model.pinvrecovery
+        c = pinv(A[:,supp]) * y
+    end
+    return c, ω[supp,:] ,ζ[supp]
 end
 
 function predict(model::srfeRegressor,X,c,ω,ζ,quantizer::Quantizer)
@@ -172,8 +192,11 @@ function prune(c, s=0.2)
     return c_
 end
 
+
+
+
 ######################################################
-# putting everything together
+# old full function
 function fit_srfe(X,Y,lasso_lambda,N,func ;σ2 = 1, q=0, quantizer=nothing, pruning=1.0, max_iter=1000)
     #weights
     m,d = size(X)
