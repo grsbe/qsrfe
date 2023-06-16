@@ -57,12 +57,13 @@ function fit(model::srfeRegressor,X,y;max_iter=20000, verbose=false)
 
     supp = abs.(c) .> 0.0
     verbose && print("support: ",sum(supp),"/",length(c))
-    c = c[supp]
+    #c = c[supp]
     #leftinverse recovery
-    if model.pinvrecovery
-        c = pinv(A[:,supp]) * y
-    end
-    return c, ω[supp,:] ,ζ[supp]
+    #if model.pinvrecovery
+    #    c = pinv(A[:,supp]) * y
+    #end
+    #return c, ω[supp,:] ,ζ[supp]
+    return c, ω ,ζ
 end
 
 function predict(model::srfeRegressor,X,c,ω,ζ,quantizer::Quantizer)
