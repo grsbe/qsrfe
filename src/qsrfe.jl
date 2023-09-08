@@ -7,6 +7,9 @@ using Random, Distributions
 using MLJ
 using MLJLinearModels
 using Parameters
+using DataFrames
+using ToeplitzMatrices
+using FFTW
 
 include("quantization.jl")
 export MSQ, βQ, ΣΔQ, quantize, condense, Quantizer

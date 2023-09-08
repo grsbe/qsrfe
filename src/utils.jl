@@ -8,7 +8,7 @@ function mse(y_truth, y_pred)
 end
 
 #dataset loader
-using MLJ, DataFrames
+
 
 function load_dataset(X,Y;normalize=true,partitioning=0.8)
     X = Matrix(DataFrame(X))

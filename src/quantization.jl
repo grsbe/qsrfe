@@ -171,8 +171,7 @@ function ΣΔcondense(q,r,λ)
     return q
 end
 
-using ToeplitzMatrices
-using FFTW
+
 
 function _βQ(A, β,λ, K,limit=1,)
     m, N = size(A)
