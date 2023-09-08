@@ -1,52 +1,54 @@
-using Distributions, Random
-using LinearAlgebra
+using Distributions, Random, LinearAlgebra
 
-
+# just the matrix of two random fourier features 
 function z(xk,wi,wj,ti,tj)
     return [cos(xk ⋅ wi + ti) cos(xk ⋅ wj + tj)]
 end
 
+# scalar product of two fourier feature vectors
 function z2(xk,wi,wj,ti,tj)
     return cos(xk ⋅ wi + ti) ⋅ cos(xk ⋅ wj + tj)
 end
 
-function trial()
-    trials = 1000
-    d = 100
+#computes scalar product of two fourier feature vectors
+function trial(m = 1000, d = 100)
+    #init arrays
     arr = Array{Float64}(undef, 0, 2)
-    s = 0.0
-    wi = rand(Uniform(-1,1),d)
+    wi = rand(Normal(),d)
     wj = rand(Normal(),d)
     ti = rand(Normal())
     tj = rand(Normal())
 
-    for i in 1:trials
+    s = 0.0
+    for i in 1:m
         xk = rand(Normal(),d)
-        arr = vcat(arr,z(xk,wi,wj,ti,tj))
-        uwu += z2(xk,wi,wj,ti,tj)
+        arr = vcat(arr,z(xk,wi,wj,ti,tj)) #builds the array
+        s += z2(xk,wi,wj,ti,tj)
     end
 
-    return [(s / (norm(arr[:,1]) * norm(arr[:,2]))) (trials/ 2 - norm(arr[:,1]) * norm(arr[:,2]))]
-    
-    
-
+    return [(s / (norm(arr[:,1]) * norm(arr[:,2]))) (1 / (norm(arr[:,1]) * norm(arr[:,2])))]
 end
 
 
 dat = Array{Float64}(undef, 0, 2)
-for i in 1:20000
+for i in 1:2000
     dat = vcat(dat,trial())
-    if i % 2000 == 0
-        print("it: ", i, ", ")
+    if i % 1000 == 0
+        print("it: ", i, " ")
     end
 end
 
+# checking
+2 / 1000
 mean(dat[:,2])
+mean(dat[:,1])
+
 
 using Plots
 histogram(dat[:,2], bins=1000)
 
 new = dat[:,2] .- 500 .+ 1000*(2/π)
+
 
 trials = 20000
 d = 50
