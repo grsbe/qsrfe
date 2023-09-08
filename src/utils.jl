@@ -15,7 +15,7 @@ function load_dataset(X,Y;normalize=true,partitioning=0.8)
     Y = collect(Y)
 
     if normalize
-        X = (X .- mean(X)) ./ std(X)
+        foreach(normalize!, eachcol(X))
     end
     
     return partition((X, Y), partitioning, rng=123, multi=true)

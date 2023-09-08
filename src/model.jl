@@ -11,7 +11,7 @@
 end
 
 
-function fit(model::srfeRegressor,X,y,quantizer::Quantizer=nothing;max_iter=20000,verbose=false)
+function fit(model::srfeRegressor,X::AbstractMatrix{<:Real},y::AbstractArray{<:Real},quantizer::Quantizer=nothing;max_iter=20000,verbose=false)
     #weights
     m,d = size(X)
     ω, ζ = gen_weights(model.N,d,model.q,model.σ2)
@@ -43,7 +43,7 @@ function fit(model::srfeRegressor,X,y,quantizer::Quantizer=nothing;max_iter=2000
     return c, ω ,ζ
 end
 
-function fit(model::srfeRegressor,X,y;max_iter=20000, verbose=false)
+function fit(model::srfeRegressor,X::AbstractMatrix{<:Real},y::AbstractArray{<:Real};max_iter=20000, verbose=false)
     #weights
     m,d = size(X)
     ω, ζ = gen_weights(model.N,d,model.q,model.σ2)
