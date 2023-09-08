@@ -1,7 +1,7 @@
 #quantization schemes
 
 abstract type Quantizer end
-
+# K = number of points evenly distributed over [-1,1]. Two points are always -1 and 1.
 
 @with_kw struct MSQ <: Quantizer
     K::Int64 = 3
