@@ -3,6 +3,10 @@ function rel_error(y_truth, y_pred)
     mean(abs.((y_truth - y_pred) ./ y_truth))
 end
 
+function abs_error(y_truth, y_pred)
+    mean(abs.(y_truth - y_pred))
+end
+
 function mse(y_truth, y_pred)
     mean((y_truth - y_pred).^2)
 end
@@ -10,7 +14,7 @@ end
 #dataset loader
 
 
-function load_dataset(X,Y;normalize=true,partitioning=0.8)
+function load_dataset(X,Y;normalize=true,partitioning=0.8,rng=123)
     X = Matrix(DataFrame(X))
     Y = collect(Y)
 
@@ -18,7 +22,7 @@ function load_dataset(X,Y;normalize=true,partitioning=0.8)
         foreach(normalize!, eachcol(X))
     end
     
-    return partition((X, Y), partitioning, rng=123, multi=true)
+    return partition((X, Y), partitioning, rng=rng, multi=true)
 end
 
 function test_metrics(ytest,ypred,ytrain,ypredtrain)
@@ -29,8 +33,8 @@ end
 
 using ProgressBars
 
-function trainandevaluate(model::srfeRegressor,quant::Quantizer, X,Y;trials=1,normalize=true,partitioning=0.8)
-    (xtrain, xtest), (ytrain, ytest) = load_dataset(X,Y;normalize=normalize,partitioning=partitioning)
+function trainandevaluate(model::srfeRegressor,quant::Quantizer, (xtrain, xtest), (ytrain, ytest);trials=1,normalize=true,partitioning=0.8)
+    #(xtrain, xtest), (ytrain, ytest) = load_dataset(X,Y;normalize=normalize,partitioning=partitioning)
     besttesterror = 100000000.0
     besttrainerror = 100000000.0
     a,b = 0.0, 0.0
@@ -49,7 +53,7 @@ function trainandevaluate(model::srfeRegressor,quant::Quantizer, X,Y;trials=1,no
 end
 
 function trainandevaluate(model::srfeRegressor,(xtrain, xtest), (ytrain, ytest);trials=1,normalize=true,partitioning=0.8)
-    (xtrain, xtest), (ytrain, ytest) = load_dataset(X,Y;normalize=normalize,partitioning=partitioning)
+    #(xtrain, xtest), (ytrain, ytest) = load_dataset(X,Y;normalize=normalize,partitioning=partitioning)
     testerror = Array{Float64}(undef,trials)
     trainerror = Array{Float64}(undef,trials)
 
