@@ -11,6 +11,10 @@ function mse(y_truth, y_pred)
     mean((y_truth - y_pred).^2)
 end
 
+function rel_mse(y_truth, y_pred)
+    sqrt(mse(y_truth, y_pred)) / norm(y_truth)
+end
+
 #dataset loader
 
 
@@ -31,38 +35,60 @@ function test_metrics(ytest,ypred,ytrain,ypredtrain)
     return
 end
 
-using ProgressBars
 
-function trainandevaluate(model::srfeRegressor,quant::Quantizer, (xtrain, xtest), (ytrain, ytest);trials=1,normalize=true,partitioning=0.8)
-    #(xtrain, xtest), (ytrain, ytest) = load_dataset(X,Y;normalize=normalize,partitioning=partitioning)
-    besttesterror = 100000000.0
-    besttrainerror = 100000000.0
-    a,b = 0.0, 0.0
-    for i in ProgressBar(1:trials)
-        c, ω, ζ = qsrfe.fit(model,xtrain,ytrain,quant)
-        ytrainpred = qsrfe.predict(model,xtrain,c, ω, ζ)
-        ytestpred = qsrfe.predict(model,xtest,c, ω, ζ)
-        a,b = rel_error(ytest,ytestpred), rel_error(ytrain,ytrainpred)
-        if a < besttesterror
-            besttesterror, besttrainerror = a,b
-        end
-        
-    end
 
-    return besttesterror, besttrainerror
-end
-
-function trainandevaluate(model::srfeRegressor,(xtrain, xtest), (ytrain, ytest);trials=1,normalize=true,partitioning=0.8)
+function trainandevaluate(model::srfeRegressor,quant::Quantizer, (xtrain, xtest), (ytrain, ytest);trials=1)
     #(xtrain, xtest), (ytrain, ytest) = load_dataset(X,Y;normalize=normalize,partitioning=partitioning)
     testerror = Array{Float64}(undef,trials)
     trainerror = Array{Float64}(undef,trials)
+    
+    abstesterror = Array{Float64}(undef,trials)
+    abstrainerror = Array{Float64}(undef,trials)
 
-    for i in ProgressBar(1:trials)
+    msetesterror = Array{Float64}(undef,trials)
+    msetrainerror = Array{Float64}(undef,trials)
+
+    relmsetesterror = Array{Float64}(undef,trials)
+    relmsetrainerror = Array{Float64}(undef,trials)
+
+    for i in 1:trials
+        c, ω, ζ = qsrfe.fit(model,xtrain,ytrain,quant)
+        ytrainpred = qsrfe.predict(model,xtrain,c, ω, ζ,quant)
+        ytestpred = qsrfe.predict(model,xtest,c, ω, ζ,quant)
+        testerror[i],trainerror[i] = rel_error(ytest,ytestpred), rel_error(ytrain,ytrainpred)
+        abstesterror[i], abstrainerror[i] = abs_error(ytest,ytestpred), abs_error(ytrain,ytrainpred)
+        msetesterror[i], msetrainerror[i] = mse(ytest,ytestpred), mse(ytrain,ytrainpred)
+        relmsetesterror[i], relmsetrainerror[i] = rel_mse(ytest,ytestpred), rel_mse(ytrain,ytrainpred)
+
+    end
+
+    return mean(testerror), mean(trainerror), mean(abstesterror), mean(abstrainerror), mean(msetesterror), mean(msetrainerror), mean(relmsetesterror), mean(relmsetrainerror)
+end
+
+function trainandevaluate(model::srfeRegressor,(xtrain, xtest), (ytrain, ytest);trials=1)
+    #(xtrain, xtest), (ytrain, ytest) = load_dataset(X,Y;normalize=normalize,partitioning=partitioning)
+    testerror = Array{Float64}(undef,trials)
+    trainerror = Array{Float64}(undef,trials)
+    
+    abstesterror = Array{Float64}(undef,trials)
+    abstrainerror = Array{Float64}(undef,trials)
+
+    msetesterror = Array{Float64}(undef,trials)
+    msetrainerror = Array{Float64}(undef,trials)
+
+    relmsetesterror = Array{Float64}(undef,trials)
+    relmsetrainerror = Array{Float64}(undef,trials)
+
+    for i in 1:trials
         c, ω, ζ = qsrfe.fit(model,xtrain,ytrain)
         ytrainpred = qsrfe.predict(model,xtrain,c, ω, ζ)
         ytestpred = qsrfe.predict(model,xtest,c, ω, ζ)
         testerror[i],trainerror[i] = rel_error(ytest,ytestpred), rel_error(ytrain,ytrainpred)
+        abstesterror[i], abstrainerror[i] = abs_error(ytest,ytestpred), abs_error(ytrain,ytrainpred)
+        msetesterror[i], msetrainerror[i] = mse(ytest,ytestpred), mse(ytrain,ytrainpred)
+        relmsetesterror[i], relmsetrainerror[i] = rel_mse(ytest,ytestpred), rel_mse(ytrain,ytrainpred)
+
     end
 
-    return mean(besttesterror), mean(besttrainerror)
+    return mean(testerror), mean(trainerror), mean(abstesterror), mean(abstrainerror), mean(msetesterror), mean(msetrainerror), mean(relmsetesterror), mean(relmsetrainerror)
 end
