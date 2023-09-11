@@ -12,7 +12,7 @@ function mse(y_truth, y_pred)
 end
 
 function rel_mse(y_truth, y_pred)
-    sqrt(mse(y_truth, y_pred)) / norm(y_truth)
+    norm(y_truth - y_pred) / norm(y_truth)
 end
 
 #dataset loader
