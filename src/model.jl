@@ -68,14 +68,15 @@ end
 
 function predict(model::srfeRegressor,X,c,ω,ζ,quantizer::Quantizer)
     A = compute_featuremap(X,ω, model.func,ζ)
-    if model.intercept
-        A = hcat(A,ones(size(A,1)))
-    end
+    
     if !isnothing(quantizer)
         A = quantize(quantizer,A)
         if quantizer.condense
             A = condense(quantizer,A)
         end
+    end
+    if model.intercept
+        A = hcat(A,ones(size(A,1)))
     end
     return A * c
 end
