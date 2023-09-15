@@ -14,7 +14,7 @@ end
     limit::Float64 = 1
     r::Int8 = 1
     λ::Int64 = 3
-    condense::Bool = false
+    condense::Bool = true
 end
 
 @with_kw struct βQ <: Quantizer
@@ -22,7 +22,7 @@ end
     limit::Float64 = 1
     β::Float64 = 1.2
     λ::Int64 = 2
-    condense::Bool = false
+    condense::Bool = true
 end
 
 #quantize function signatures
