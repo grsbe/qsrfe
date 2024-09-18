@@ -1,5 +1,5 @@
 
-@with_kw struct srfeRegressor
+@with_kw mutable struct srfeRegressor
     N::Int64 = 1000
     λ::Float64 = 0.003
     q::Int64 = 0
@@ -12,7 +12,7 @@
     ζ::Union{Nothing,Vector{Float64}} = nothing
 end
 
-@with_kw struct rfeRegressor
+@with_kw mutable struct rfeRegressor
     N::Int64 = 1000
     λ::Float64 = 0.003
     q::Int64 = 0
