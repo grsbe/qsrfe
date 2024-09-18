@@ -3,19 +3,34 @@
     N::Int64 = 1000
     λ::Float64 = 0.003
     q::Int64 = 0
+    func::Function = rff
+    σ2::Float64 = 1
+    pruning::Float64=1.0
+    intercept::Bool = false
+    c::Union{Nothing,Vector{Float64}} = nothing
+    ω::Union{Nothing,Matrix{Float64}} = nothing
+    ζ::Union{Nothing,Vector{Float64}} = nothing
+end
+
+@with_kw struct rfeRegressor
+    N::Int64 = 1000
+    λ::Float64 = 0.003
+    q::Int64 = 0
     func = rff
     σ2::Float64 = 1
     pruning::Float64=1.0
     intercept::Bool = false
-    pinvrecovery::Bool=false
+    c::Union{Nothing,Vector{Float64}} = nothing
+    ω::Union{Nothing,Matrix{Float64}} = nothing
+    ζ::Union{Nothing,Vector{Float64}} = nothing
 end
 
 
-function fit(model::srfeRegressor,X::AbstractMatrix{<:Real},y::AbstractVector{<:Real},quantizer::Quantizer;max_iter::Int=20000,verbose::Bool=false)
+function fit(model::srfeRegressor,X::AbstractMatrix{<:Real},y::AbstractVector{<:Real},quantizer::Union{Quantizer,Nothing}=nothing;max_iter::Int=20000,verbose::Bool=false)
     #weights
     m,d = size(X)
     ω, ζ = gen_weights(model.N,d,model.q,model.σ2)
-    #println("compute features")
+
     A = compute_featuremap(X,ω, model.func,ζ)
 
     if !isnothing(quantizer)
@@ -31,44 +46,63 @@ function fit(model::srfeRegressor,X::AbstractMatrix{<:Real},y::AbstractVector{<:
     prune!(c,model.pruning)
     supp = abs.(c) .> 0.0
     verbose && print("support: ",sum(supp),"/",length(c))
-    #c = c[supp]
-    #leftinverse recovery
-    if model.pinvrecovery
-        c = pinv(A[:,supp]) * y
-    end
-    if quantizer.condense
-        supp = repeat(supp, inner=quantizer.λ)
-    end
-    #return c, ω[supp,:] ,ζ[supp]
-    return c, ω ,ζ
+    model.c = c
+    model.ω = ω
+    model.ζ = ζ
+    return c
 end
 
-function fit(model::srfeRegressor,X::AbstractMatrix{<:Real},y::AbstractVector{<:Real};max_iter::Int=20000, verbose::Bool=false)
+function fit(model::rfeRegressor,X::AbstractMatrix{<:Real},y::AbstractVector{<:Real},quantizer::Union{Quantizer,Nothing}=nothing;verbose::Bool=false)
     #weights
     m,d = size(X)
     ω, ζ = gen_weights(model.N,d,model.q,model.σ2)
-    #println("compute features")
+
     A = compute_featuremap(X,ω, model.func,ζ)
 
-    lasso = LassoRegression(model.λ; fit_intercept=model.intercept) #if intercept is true, the last element of c is the intercept
-    solver = FISTA(max_iter=max_iter)
-    c = MLJLinearModels.fit(lasso,A,y;solver)
-    prune!(c,model.pruning)
+    if !isnothing(quantizer)
+        A = quantize(quantizer,A)
+        if quantizer.condense
+            A = condense(quantizer,A)
+        end
+    end
+    
+    if model.intercept
+        A = hcat(A,ones(size(A,1)))
+    end
+    c = (A' * A + model.λ * I) \ (A'*y)
 
+    #prune!(c,model.pruning) makes no sense for rfe
     supp = abs.(c) .> 0.0
     verbose && print("support: ",sum(supp),"/",length(c))
-    #c = c[supp]
-    #leftinverse recovery
-    #if model.pinvrecovery
-    #    c = pinv(A[:,supp]) * y
-    #end
-    #return c, ω[supp,:] ,ζ[supp]
-    return c, ω ,ζ
+    model.c = c
+    model.ω = ω
+    model.ζ = ζ
+    return c
 end
 
-function predict(model::srfeRegressor,X,c,ω,ζ,quantizer::Quantizer)
-    A = compute_featuremap(X,ω, model.func,ζ)
+# function fit(model::srfeRegressor,X::AbstractMatrix{<:Real},y::AbstractVector{<:Real};max_iter::Int=20000, verbose::Bool=false)
+#     #weights
+#     m,d = size(X)
+#     ω, ζ = gen_weights(model.N,d,model.q,model.σ2)
+#     #println("compute features")
+#     A = compute_featuremap(X,ω, model.func,ζ)
+
+#     lasso = LassoRegression(model.λ; fit_intercept=model.intercept) #if intercept is true, the last element of c is the intercept
+#     solver = FISTA(max_iter=max_iter)
+#     c = MLJLinearModels.fit(lasso,A,y;solver)
+#     prune!(c,model.pruning)
+
+#     verbose && print("support: ",sum(supp),"/",length(c))
+
+#     return c, ω ,ζ
+# end
+
+function predict(model::srfeRegressor,X::AbstractMatrix,quantizer::Union{Quantizer,Nothing}=nothing)
     
+    if isnotthing(model.c)
+        throw(ArgumentError("model has not been fitted yet"))
+    end
+    A = compute_featuremap(X,model.ω, model.func,model.ζ)
     if !isnothing(quantizer)
         A = quantize(quantizer,A)
         if quantizer.condense
@@ -78,16 +112,39 @@ function predict(model::srfeRegressor,X,c,ω,ζ,quantizer::Quantizer)
     if model.intercept
         A = hcat(A,ones(size(A,1)))
     end
-    return A * c
+    return A * model.c
 end
 
-function predict(model::srfeRegressor,X,c,ω,ζ)
-    A = compute_featuremap(X,ω, model.func,ζ)
+# function predict(model::srfeRegressor,X,c,ω,ζ)
+#     A = compute_featuremap(X,ω, model.func,ζ)
+#     if model.intercept
+#         A = hcat(A,ones(size(A,1)))
+#     end
+#     return A * c
+# end
+
+function predict(model::rfeRegressor,X::AbstractMatrix,quantizer::Union{Quantizer,Nothing}=nothing)
+    if isnotthing(model.c)
+        throw(ArgumentError("model has not been fitted yet"))
+    end
+    A = compute_featuremap(X,model.ω, model.func,model.ζ)
+    if !isnothing(quantizer)
+        A = quantize(quantizer,A)
+        if quantizer.condense
+            A = condense(quantizer,A)
+        end
+    end
     if model.intercept
         A = hcat(A,ones(size(A,1)))
     end
-    return A * c
+    return A * model.c
 end
+
+
+
+########################
+# all the helper functions
+########################
 
 #generate weights
 function gen_weights(N,d,q=0,σ2=1)

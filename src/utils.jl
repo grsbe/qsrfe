@@ -1,4 +1,13 @@
 #error calc
+
+function rel_L2_error(y_truth, y_pred)
+    norm(y_truth - y_pred) / norm(y_truth)
+end
+
+function rmse(y_truth, y_pred)
+    sqrt(mean((y_truth - y_pred).^2))
+end
+
 function rel_error(y_truth, y_pred)
     mean(abs.((y_truth - y_pred) ./ y_truth))
 end
