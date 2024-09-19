@@ -192,16 +192,24 @@ function _βQ(A, β,λ, K,limit=1,)
     p = N / λ
     p = convert(Int64,p)
     A = (A .* (2 * K - β)) ./(2 * K - 1)
-    H_β = Toeplitz([[1,-β];zeros(Float64,λ-2)],[[1];zeros(Float64,λ-1)])
-    H =  diagm(ones(N)) - kron(diagm(ones(p)),H_β)
+
+    # reaaaaaaaaally slow and bad
+    #H_β = Toeplitz([[1,-β];zeros(Float64,λ-2)],[[1];zeros(Float64,λ-1)])
+    #H =  I - kron(diagm(ones(p)),H_β)
+    # the following fixes it 
+    
+    function h(j,β)
+        return (j % λ == 0) ? 0 : β
+    end
+
     u = zeros(N+1) #u[i+1] = u_i
     q = zeros((m, N))
     for i in 1:m
         q[i,1] = rounding_quantizer(A[i,1],Δ,limit)
         u[2] = A[i,1] - q[i,1]
         for j in 2:N
-            q[i,j] = rounding_quantizer(A[i,j]+H[j,j-1]*u[j],Δ,limit)
-            u[j+1] = H[j,j-1] * u[j] + A[i,j]  - q[i,j]
+            q[i,j] = rounding_quantizer(A[i,j]+h(j,β)*u[j],Δ,limit)
+            u[j+1] = h(j,β) * u[j] + A[i,j]  - q[i,j]
         end
     end
 

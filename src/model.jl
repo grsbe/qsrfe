@@ -99,7 +99,7 @@ end
 
 function predict(model::srfeRegressor,X::AbstractMatrix,quantizer::Union{Quantizer,Nothing}=nothing)
     
-    if isnotthing(model.c)
+    if isnothing(model.c)
         throw(ArgumentError("model has not been fitted yet"))
     end
     A = compute_featuremap(X,model.ω, model.func,model.ζ)
@@ -124,7 +124,7 @@ end
 # end
 
 function predict(model::rfeRegressor,X::AbstractMatrix,quantizer::Union{Quantizer,Nothing}=nothing)
-    if isnotthing(model.c)
+    if isnothing(model.c)
         throw(ArgumentError("model has not been fitted yet"))
     end
     A = compute_featuremap(X,model.ω, model.func,model.ζ)
@@ -204,12 +204,10 @@ function compute_featuremap(x,ω,func,ζ)
     if d1 != d2 
         error("mismatching dimensions")
     end
-    A = zeros(Float64, m,N)
-    for i in 1:m
-        for j in 1:N
-            A[i,j] = func(x[i,:] ⋅ ω[j,:] + ζ[j])
-        end
-    end
+    
+    # very nice code:
+    A = func.(x * ω' .+ ζ')
+    
     return A
 end
 
