@@ -45,6 +45,20 @@ function test_metrics(ytest,ypred,ytrain,ypredtrain)
 end
 
 
+using DataFrames
+function create_df(initial_vector; empty=true)
+    # creates an empty dataframe with dimensions of the initial vector as one row
+    # this is way more complicated than one empty column in Dataframes
+    df = DataFrame(B = initial_vector)
+    df[!, :id] = 1:size(df, 1)
+    tmp = stack(df)
+    df = select!(unstack(tmp, :id, :value), Not(:variable))
+    if empty
+        deleteat!(df,1)
+    end
+    return df
+end
+
 
 function trainandevaluate(model::srfeRegressor,quant::Quantizer, (xtrain, xtest), (ytrain, ytest);trials=1)
     #(xtrain, xtest), (ytrain, ytest) = load_dataset(X,Y;normalize=normalize,partitioning=partitioning)

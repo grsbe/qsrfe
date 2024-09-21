@@ -66,10 +66,12 @@ function fit(model::rfeRegressor,X::AbstractMatrix{<:Real},y::AbstractVector{<:R
         end
     end
     
-    if model.intercept
-        A = hcat(A,ones(size(A,1)))
-    end
-    c = (A' * A + model.λ * I) \ (A'*y)
+    # if model.intercept
+    #     A = hcat(A,ones(size(A,1)))
+    # end
+    ridge = RidgeRegression(model.λ; fit_intercept=model.intercept)
+    c = MLJLinearModels.fit(ridge,A,y)
+    #c = (A' * A + model.λ * I) \ (A'*y)
 
     #prune!(c,model.pruning) makes no sense for rfe
     supp = abs.(c) .> 0.0
