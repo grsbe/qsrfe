@@ -60,7 +60,7 @@ function create_df(initial_vector; empty=true)
 end
 
 
-function trainandevaluate(model::srfeRegressor,quant::Quantizer, (xtrain, xtest), (ytrain, ytest);trials=1)
+function trainandevaluate(model,quant::Quantizer, (xtrain, xtest), (ytrain, ytest);trials=1)
     #(xtrain, xtest), (ytrain, ytest) = load_dataset(X,Y;normalize=normalize,partitioning=partitioning)
     testerror = Array{Float64}(undef,trials)
     trainerror = Array{Float64}(undef,trials)
@@ -75,9 +75,9 @@ function trainandevaluate(model::srfeRegressor,quant::Quantizer, (xtrain, xtest)
     relmsetrainerror = Array{Float64}(undef,trials)
 
     for i in 1:trials
-        c, ω, ζ = qsrfe.fit(model,xtrain,ytrain,quant)
-        ytrainpred = qsrfe.predict(model,xtrain,c, ω, ζ,quant)
-        ytestpred = qsrfe.predict(model,xtest,c, ω, ζ,quant)
+        c = fit(model,xtrain,ytrain,quant)
+        ytrainpred = predict(model,xtrain,quant)
+        ytestpred = predict(model,xtest,quant)
         testerror[i],trainerror[i] = rel_error(ytest,ytestpred), rel_error(ytrain,ytrainpred)
         abstesterror[i], abstrainerror[i] = abs_error(ytest,ytestpred), abs_error(ytrain,ytrainpred)
         msetesterror[i], msetrainerror[i] = mse(ytest,ytestpred), mse(ytrain,ytrainpred)
@@ -88,7 +88,7 @@ function trainandevaluate(model::srfeRegressor,quant::Quantizer, (xtrain, xtest)
     return mean(testerror), mean(trainerror), mean(abstesterror), mean(abstrainerror), mean(msetesterror), mean(msetrainerror), mean(relmsetesterror), mean(relmsetrainerror)
 end
 
-function trainandevaluate(model::srfeRegressor,(xtrain, xtest), (ytrain, ytest);trials=1)
+function trainandevaluate(model,(xtrain, xtest), (ytrain, ytest);trials=1)
     #(xtrain, xtest), (ytrain, ytest) = load_dataset(X,Y;normalize=normalize,partitioning=partitioning)
     testerror = Array{Float64}(undef,trials)
     trainerror = Array{Float64}(undef,trials)
@@ -103,9 +103,9 @@ function trainandevaluate(model::srfeRegressor,(xtrain, xtest), (ytrain, ytest);
     relmsetrainerror = Array{Float64}(undef,trials)
 
     for i in 1:trials
-        c, ω, ζ = qsrfe.fit(model,xtrain,ytrain)
-        ytrainpred = qsrfe.predict(model,xtrain,c, ω, ζ)
-        ytestpred = qsrfe.predict(model,xtest,c, ω, ζ)
+        c = fit(model,xtrain,ytrain)
+        ytrainpred = predict(model,xtrain)
+        ytestpred = predict(model,xtest)
         testerror[i],trainerror[i] = rel_error(ytest,ytestpred), rel_error(ytrain,ytrainpred)
         abstesterror[i], abstrainerror[i] = abs_error(ytest,ytestpred), abs_error(ytrain,ytrainpred)
         msetesterror[i], msetrainerror[i] = mse(ytest,ytestpred), mse(ytrain,ytrainpred)

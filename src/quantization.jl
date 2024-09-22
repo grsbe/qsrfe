@@ -199,7 +199,7 @@ function _βQ(A, β,λ, K,limit=1,)
     # the following fixes it 
     
     function h(j,β)
-        return (j % λ == 0) ? 0 : β
+        return (j % λ == 1) ? 0 : β
     end
 
     u = zeros(N+1) #u[i+1] = u_i
