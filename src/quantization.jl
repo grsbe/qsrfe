@@ -25,9 +25,21 @@ end
     condense::Bool = true
 end
 
+@with_kw struct βcondense <: Quantizer
+    β::Float64 = 1.5
+    λ::Int64 = 2
+    condense::Bool = true
+end
+
+
 #quantize function signatures
 function quantize(q::Quantizer,A::AbstractMatrix{<:Real})
     return _quantize(q,A)
+end
+
+#just only condensation
+function _quantize(q::βcondense,A::AbstractMatrix{<:Real})
+    return _βcondense(A,q.β,q.λ)
 end
 
 function _quantize(q::MSQ,A)

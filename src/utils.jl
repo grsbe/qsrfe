@@ -82,7 +82,7 @@ function trainandevaluate(model,quant::Quantizer, (xtrain, xtest), (ytrain, ytes
         abstesterror[i], abstrainerror[i] = abs_error(ytest,ytestpred), abs_error(ytrain,ytrainpred)
         msetesterror[i], msetrainerror[i] = mse(ytest,ytestpred), mse(ytrain,ytrainpred)
         relmsetesterror[i], relmsetrainerror[i] = rel_mse(ytest,ytestpred), rel_mse(ytrain,ytrainpred)
-
+        println("here:", mse(ytest,ytestpred))
     end
 
     return mean(testerror), mean(trainerror), mean(abstesterror), mean(abstrainerror), mean(msetesterror), mean(msetrainerror), mean(relmsetesterror), mean(relmsetrainerror)
@@ -108,6 +108,7 @@ function trainandevaluate(model,(xtrain, xtest), (ytrain, ytest);trials=1)
         ytestpred = predict(model,xtest)
         testerror[i],trainerror[i] = rel_error(ytest,ytestpred), rel_error(ytrain,ytrainpred)
         abstesterror[i], abstrainerror[i] = abs_error(ytest,ytestpred), abs_error(ytrain,ytrainpred)
+        
         msetesterror[i], msetrainerror[i] = mse(ytest,ytestpred), mse(ytrain,ytrainpred)
         relmsetesterror[i], relmsetrainerror[i] = rel_mse(ytest,ytestpred), rel_mse(ytrain,ytrainpred)
 
