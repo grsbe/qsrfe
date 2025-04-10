@@ -25,11 +25,11 @@ end
     condense::Bool = true
 end
 
-@with_kw struct βcondense <: Quantizer
-    β::Float64 = 1.5
-    λ::Int64 = 2
-    condense::Bool = true
-end
+# @with_kw struct βcondenser <: Quantizer
+#     β::Float64 = 1.5
+#     λ::Int64 = 2
+#     condense::Bool = true
+# end
 
 
 #quantize function signatures
@@ -38,9 +38,9 @@ function quantize(q::Quantizer,A::AbstractMatrix{<:Real})
 end
 
 #just only condensation
-function _quantize(q::βcondense,A::AbstractMatrix{<:Real})
-    return _βcondense(A,q.β,q.λ)
-end
+# function _quantize(q::βcondense,A::AbstractMatrix{<:Real})
+#     return _βcondense(A,q.β,q.λ)
+# end
 
 function _quantize(q::MSQ,A)
     return _MSQ(A,q.K,q.limit)
@@ -210,9 +210,17 @@ function _βQ(A, β,λ, K,limit=1,)
     #H =  I - kron(diagm(ones(p)),H_β)
     # the following fixes it 
     
-    function h(j,β)
-        return (j % λ == 1) ? 0 : β
+    # function h(j,β)
+    #     return (j % λ == 1) ? 0 : β
+    # end
+
+    h = ones(Float64,N) * β
+    for j in 1:N
+        if j % λ == 1
+            h[j] = 0
+        end
     end
+    
 
     u = zeros(N+1) #u[i+1] = u_i
     q = zeros((m, N))
@@ -220,8 +228,8 @@ function _βQ(A, β,λ, K,limit=1,)
         q[i,1] = rounding_quantizer(A[i,1],Δ,limit)
         u[2] = A[i,1] - q[i,1]
         for j in 2:N
-            q[i,j] = rounding_quantizer(A[i,j]+h(j,β)*u[j],Δ,limit)
-            u[j+1] = h(j,β) * u[j] + A[i,j]  - q[i,j]
+            q[i,j] = rounding_quantizer(A[i,j]+h[j]*u[j],Δ,limit)
+            u[j+1] = h[j] * u[j] + A[i,j]  - q[i,j]
         end
     end
 
